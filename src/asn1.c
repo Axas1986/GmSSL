@@ -1012,14 +1012,18 @@ int asn1_object_identifier_to_octets(const uint32_t *nodes, size_t nodes_cnt, ui
 		return -1;
 	}
 	if (out) {
-		*out++ = (uint8_t)(nodes[0] * 40 + nodes[1]);
+		*out++ = (uint8_t)(nodes[0] * 40 + nodes[1]); //根据oid的编码规则，oid的前两个数字nodes[0]和nodes[1]在编码前，
+														// 转换为 nodes[0] * 40 + nodes[1],作为一个新的数字进行base128编码
+														//这里貌似直接写入out结果，可能是因为在这种使用场景下，
+														// (nodes[0] * 40 + nodes[1]) <128,因此只需要一个uint8_t的低7位就能表示。
 	}
-	(*outlen) = 1;
-	nodes += 2;
-	nodes_cnt -= 2;
+	(*outlen) = 1;	//长度加1，说明前两个数字经转换后只使用了一个字节
+	nodes += 2;		//指向nodes[2]
+	nodes_cnt -= 2; //去掉前两个数字，剩余长度为nodes_cnt-2
 
 	while (nodes_cnt--) {
-		asn1_oid_node_to_base128(*nodes++, &out, outlen);
+		asn1_oid_node_to_base128(*nodes++, &out, outlen);	// 对nodes[1]之后的内个数字都进行base128编码，然后拼接，
+															// 最终返回的out为oid编码的结果，长度为oid编码后的长度
 	}
 	return 1;
 }
@@ -1074,18 +1078,18 @@ int asn1_object_identifier_to_der_ex(int tag, const uint32_t *nodes, size_t node
 		}
 		return 0;
 	}
-
+	// 对oid进行编码
 	if (asn1_object_identifier_to_octets(nodes, nodes_cnt, octets, &octetslen) != 1) {
 		error_print();
 		return -1;
 	}
-
+	// 填充oid对应的tag到*out中（TLV中的T)
 	if (out && *out) {
-		*(*out)++ = tag;
+		*(*out)++ = tag;  //先取*out，获取对应的要填充的地址，*out是buf地址,再取**out，然后tag赋值给**out = tag;然后(*out)地址自增。
 	}
-	(*outlen)++;
+	(*outlen)++;	//*outlen的值加1，也就是说tag的长度为1个字节
 
-	(void)asn1_length_to_der(octetslen, out, outlen);
+	(void)asn1_length_to_der(octetslen, out, outlen); //(void)的作用：显示忽略该函数的返回值
 
 	if (out && *out) {
 		memcpy(*out, octets, octetslen);

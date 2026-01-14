@@ -29,9 +29,11 @@ extern "C" {
 #define ASN1_TAG_PRIMITIVE		0x00
 #define ASN1_TAG_CONSTRUCTED		0x20
 
-#define ASN1_TAG_IMPLICIT(index)	(ASN1_TAG_CONTENT_SPECIFIC|(index))
-#define ASN1_TAG_EXPLICIT(index)	ASN1_TAG_IMPLICIT(ASN1_TAG_CONSTRUCTED|(index))
-
+#define ASN1_TAG_IMPLICIT(index)	(ASN1_TAG_CONTENT_SPECIFIC|(index))				// ASN1_TAG_CONTENT_SPECIFIC表示content_specific类型的标签，
+																						// Tag通常占用1字节，其中第8、7比特位表示Tag的类型，
+																						// 第6位表示Tag是单一字段类型还是符合字段类型
+#define ASN1_TAG_EXPLICIT(index)	ASN1_TAG_IMPLICIT(ASN1_TAG_CONSTRUCTED|(index)) //ASN1_TAG_CONSTRUCTED表示construct类型（复合字段），
+																					// 与显式标签 [0] EXPLICIT 按位或运算
 
 #define ASN1_FMT_FULL	0x01
 
@@ -168,6 +170,7 @@ int asn1_object_identifier_from_octets(uint32_t *nodes, size_t *nodes_cnt, const
 
 int asn1_object_identifier_to_der_ex(int tag, const uint32_t *nodes, size_t nodes_cnt, uint8_t **out, size_t *outlen);
 int asn1_object_identifier_from_der_ex(int tag, uint32_t *nodes, size_t *nodes_cnt, const uint8_t **in, size_t *inlen);
+// OIDder编码函数
 #define asn1_object_identifier_to_der(nodes,nodes_cnt,out,outlen) asn1_object_identifier_to_der_ex(ASN1_TAG_OBJECT_IDENTIFIER,nodes,nodes_cnt,out,outlen)
 #define asn1_object_identifier_from_der(nodes,nodes_cnt,in,inlen) asn1_object_identifier_from_der_ex(ASN1_TAG_OBJECT_IDENTIFIER,nodes,nodes_cnt,in,inlen)
 #define asn1_implicit_object_identifier_to_der(i,nodes,nodes_cnt,out,outlen) asn1_object_identifier_to_der_ex(ASN1_TAG_IMPLICIT(i),nodes,nodes_cnt,out,outlen)
@@ -177,10 +180,11 @@ int asn1_object_identifier_print(FILE *fp, int fmt, int ind, const char *label, 
 	const uint32_t *nodes, size_t nodes_cnt);
 
 typedef struct {
-	int oid;
+	int oid; //这个oid不是真正的oid，类似于算法标识，比如SM4-GCM算法会有一个int值的标识
 	char *name;
-	uint32_t *nodes;
-	size_t nodes_cnt;
+	uint32_t *nodes;	//oid的格式为xxx.xxx.xxx.xxx，每段当做一个节点(node），
+						// 每个node以uint32_t存储，于是oid存储在一个元素为uint32_t的数组里，nodes为该数组的首地址
+	size_t nodes_cnt;	// oid 数组中元素的个数
 	int flags;
 	char *description;
 } ASN1_OID_INFO;

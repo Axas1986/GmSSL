@@ -45,7 +45,9 @@ ContentType:
 */
 const char *cms_content_type_name(int oid);
 int cms_content_type_from_name(const char *name);
+// 根据oid的标识（类似于键值对的key），将对应的oid(xx.xxx.xxx形式，类似于ip地址)der编码
 int cms_content_type_to_der(int oid, uint8_t **out, size_t *outlen);
+// 输入编码后的oid，进行der解码
 int cms_content_type_from_der(int *oid, const uint8_t **in, size_t *inlen);
 
 /*
@@ -53,6 +55,8 @@ ContentInfo ::= SEQUENCE {
 	contentType	OBJECT IDENTIFIER,
 	content		[0] EXPLICIT ANY OPTIONAL }
 */
+// ContentInfo头的编码，包括content_type字段编码，以及ContentInfo长度的编码
+// 需要事先知道content编码后的长度content_len
 int cms_content_info_header_to_der(
 	int content_type, size_t content_len,
 	uint8_t **out, size_t *outlen);

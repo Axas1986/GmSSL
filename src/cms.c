@@ -28,7 +28,7 @@
 #include <gmssl/cms.h>
 
 
-
+// 这里定义的数组是不同数据类型的OID type.
 static uint32_t oid_cms_data[] = { oid_sm2_cms,1 };
 static uint32_t oid_cms_signed_data[] = { oid_sm2_cms,2 };
 static uint32_t oid_cms_enveloped_data[] = { oid_sm2_cms,3 };
@@ -76,10 +76,12 @@ int cms_content_type_to_der(int oid, uint8_t **out, size_t *outlen)
 	if (oid == -1) {
 		return 0;
 	}
+	// 从cms_content_types信息列表中根据oid标识获取oid信息（oid类似于一个key，通过key获取oid信息)
 	if (!(info = asn1_oid_info_from_oid(cms_content_types, cms_content_types_count, oid))) {
 		error_print();
 		return -1;
 	}
+	// OID der编码，输入oid的nodes和nodes_cnt,返回编码后的数据和长度
 	if (asn1_object_identifier_to_der(info->nodes, info->nodes_cnt, out, outlen) != 1) {
 		error_print();
 		return -1;
@@ -91,7 +93,7 @@ int cms_content_type_from_der(int *oid, const uint8_t **in, size_t *inlen)
 {
 	int ret;
 	const ASN1_OID_INFO *info;
-
+	// oid解码，编码的逆过程，不再详细注释
 	if ((ret = asn1_oid_info_from_der(&info, cms_content_types, cms_content_types_count, in, inlen)) != 1) {
 		if (ret < 0) error_print();
 		else *oid = -1;
