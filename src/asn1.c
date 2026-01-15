@@ -274,11 +274,12 @@ int asn1_header_to_der(int tag, size_t dlen, uint8_t **out, size_t *outlen)
 	}
 
 	if (out && *out) {
-		*(*out)++ = (uint8_t)tag;
+		*(*out)++ = (uint8_t)tag;	// 对Tag进行编码，Tag一般占用一个字节，转为uint8_t后，直接写入buffer
 	}
-	(*outlen)++;
+	(*outlen)++;	//加上Tag的长度1
 
-	(void)asn1_length_to_der(dlen, out, outlen);
+	(void)asn1_length_to_der(dlen, out, outlen);	// 对长度进行编码，注意dlen是TLV中的L，指的是TLV的V(Value)的长度
+													// 而outlen指的是该数据类型TLV编码后的总长度
 	return 1;
 }
 
@@ -1089,7 +1090,7 @@ int asn1_object_identifier_to_der_ex(int tag, const uint32_t *nodes, size_t node
 	}
 	(*outlen)++;	//*outlen的值加1，也就是说tag的长度为1个字节
 
-	(void)asn1_length_to_der(octetslen, out, outlen); //(void)的作用：显示忽略该函数的返回值
+	(void)asn1_length_to_der(octetslen, out, outlen); //(void)的作用：显式忽略该函数的返回值
 
 	if (out && *out) {
 		memcpy(*out, octets, octetslen);

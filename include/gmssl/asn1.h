@@ -282,7 +282,7 @@ int asn1_header_to_der(int tag, size_t dlen, uint8_t **out, size_t *outlen);
 #define asn1_octet_string_header_to_der(dlen,out,outlen) asn1_header_to_der(ASN1_TAG_OCTET_STRING,dlen,out,outlen)
 
 #define asn1_sequence_header_to_der_ex(tag,dlen,out,outlen) asn1_header_to_der(tag,dlen,out,outlen)
-#define asn1_sequence_header_to_der(dlen,out,outlen) asn1_header_to_der(ASN1_TAG_SEQUENCE,dlen,out,outlen)
+#define asn1_sequence_header_to_der(dlen,out,outlen) asn1_header_to_der(ASN1_TAG_SEQUENCE,dlen,out,outlen) // ASN1_TAG_SEQUENCE：Sequence类型对应的Tag值 0x30
 #define asn1_implicit_sequence_header_to_der(i,dlen,out,outlen) asn1_header_to_der(ASN1_TAG_EXPLICIT(i),dlen,out,outlen)
 
 #define asn1_set_header_to_der(dlen,out,outlen) asn1_header_to_der(ASN1_TAG_SET,dlen,out,outlen)

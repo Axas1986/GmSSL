@@ -128,32 +128,55 @@ int cms_content_info_header_to_der(int content_type, size_t content_len, uint8_t
 		return cms_content_info_data_header_to_der(content_len, out, outlen);
 	}
 	*/
+	// 注意：在梳理逻辑时要注意长度是某个类型编码后的TLV的总长度（通常给嵌套类型外层使用）,还是L所指的V的长度
+	if (cms_content_type_to_der(content_type, NULL, &len) != 1			// 获取编码后content_type的长度，之所以填NULL，是因为这里仅用作获取编码后的长度
+																		// 此处len为der(content_type)的TLV的长度
+		|| asn1_explicit_header_to_der(0, content_len, NULL, &len) < 0 	// 获取编码后content EXPLICIT编码后的长度。
+																		// content 有[0] EXPLICIT 标记，需要两次编码。
+																		// 第一次编码是content内容本身的编码，第二次编码是对content内容编码后，以[0]为TAG进行EXPLICIT编码
+																		// content_len为content第一次编码后的TLV结构总长度，此处的len为der(content_type) + der(content)的总长度
 
-	if (cms_content_type_to_der(content_type, NULL, &len) != 1
-		|| asn1_explicit_header_to_der(0, content_len, NULL, &len) < 0
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
-		|| cms_content_type_to_der(content_type, out, outlen) != 1
-		|| asn1_explicit_header_to_der(0, content_len, out, outlen) < 0) {
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1			// ContentInfo为SEQUENCE类型，此函数是将ContentInfo的TAG和Length进行编码，直接输出到out
+																		// 此处的len为der(content_type) + der(content)的总长度,也就是SEQUENCE中所有元素编码后的长度
+																		// outlen在计算过程中逐渐累加，最终为ContentInfo编码后的TLV结构的总长度
+																		// 注意此时outlen的长度是ContentInfo的TLV结构中的T和L编码后占的字节的长度
+
+		|| cms_content_type_to_der(content_type, out, outlen) != 1		// 此处对content_type进行编码，编码后，outlen的长度增加TLV(content_type)的长度
+
+		|| asn1_explicit_header_to_der(0, content_len, out, outlen) < 0) {	// 此处对content类型的[0] EXPLICIT 二次编码，content_len为content第一次编码后的TLV结构总长度
+																			// 编码后，outlen增加二次编码后T和L所占的长度
 		error_print();
 		return -1;
 	}
-	return 1;
+	return 1;			// 整个函数执行结束后，ContentInfo除了content第一次编码之外的所有内容都已经编码好了。因此只需要将content一次编码的TLV结果写到后面就可以了。
 }
 
+/*
+ContentInfo ::= SEQUENCE {
+	contentType	OBJECT IDENTIFIER,
+	content		[0] EXPLICIT ANY OPTIONAL }
+*/
+// 其中 content为 Data ：：= OCTET STRING类型
 static int cms_content_info_data_to_der(const uint8_t *d, size_t dlen, uint8_t **out, size_t *outlen)
 {
 	size_t len = 0;
 	size_t content_len = 0;
-	if (asn1_octet_string_to_der(d, dlen, NULL, &content_len) != 1
-		|| cms_content_type_to_der(OID_cms_data, NULL, &len) != 1
-		|| asn1_explicit_to_der(0, d, content_len, NULL, &len) != 1
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
-		|| cms_content_type_to_der(OID_cms_data, out, outlen) != 1
-		|| asn1_explicit_header_to_der(0, content_len, out, outlen) != 1
-		|| asn1_octet_string_to_der(d, dlen, out, outlen) != 1) {
-		error_print();
+	if (asn1_octet_string_to_der(d, dlen, NULL, &content_len) != 1			// 获取编码后Data的长度，存放在content_len里
+		|| cms_content_type_to_der(OID_cms_data, NULL, &len) != 1			// 获取编码后content_type的长度，之所以填NULL，是因为这里仅用作获取编码后的长度
+
+		|| asn1_explicit_to_der(0, d, content_len, NULL, &len) != 1			// 获取编码后content的 [0] EXPLICIT编码后的长度。
+																			// content 有[0] EXPLICIT 标记，需要两次编码
+
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1				// ContentInfo为SEQUENCE类型，此函数是将ContentInfo的TAG和Length进行编码，直接输出到out
+																			// 此处的len为der(content_type) + der(data)的总长度,也就是SEQUENCE中所有元素编码后的长度	
+
+		|| cms_content_type_to_der(OID_cms_data, out, outlen) != 1			// 此处对content_type进行编码，编码后，outlen的长度增加TLV(content_type)的长度
+		|| asn1_explicit_header_to_der(0, content_len, out, outlen) != 1	// 此处对content为data类型的[0] EXPLICIT 二次编码，content_len为content第一次编码后的TLV结构总长度
+																			// 编码后，outlen增加二次编码后T和L所占的长度
+		|| asn1_octet_string_to_der(d, dlen, out, outlen) != 1) {			// 此处对content为data类型的数据进行第一次编码，这是整个结构的末尾，填充后，out输出为完整的编码结构
+		error_print();							
 		return -1;
-	}
+	}																		// 至此，完成了对content为data类型的ContentInfo结构的完整的der编码
 	return 1;
 }
 
