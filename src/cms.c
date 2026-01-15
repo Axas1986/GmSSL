@@ -286,6 +286,16 @@ err:
 	return -1;
 }
 
+// EncryptedContentInfo的编码，在实际使用的时候，不需要sharedInfo1和sharedInfo2信息
+/*
+对EncryptedContentInfo进行编码
+EncryptedContentInfo ::= SEQUENCE {
+	contentType			OBJECT IDENTIFIER,
+	contentEncryptionAlgorithm	AlgorithmIdentifier,
+	encryptedContent		[0] IMPLICIT OCTET STRING OPTIONAL,
+	sharedInfo1			[1] IMPLICIT OCTET STRING OPTIONAL,
+	sharedInfo2			[2] IMPLICIT OCTET STRING OPTIONAL }
+*/
 int cms_enced_content_info_to_der(
 	int content_type,
 	int enc_algor, const uint8_t *enc_iv, size_t enc_iv_len,
@@ -296,22 +306,27 @@ int cms_enced_content_info_to_der(
 {
 	size_t len = 0;
 	if (cms_content_type_to_der(content_type, NULL, &len) != 1											// 获取编码后content_type的长度，之所以填NULL，是因为这里仅用作获取编码后的长度
-		|| x509_encryption_algor_to_der(enc_algor, enc_iv, enc_iv_len, NULL, &len) != 1					// 对 contentEncryptionAlgorithm进行编码，
-		|| asn1_implicit_octet_string_to_der(0, enced_content, enced_content_len, NULL, &len) < 0
-		|| asn1_implicit_octet_string_to_der(1, shared_info1, shared_info1_len, NULL, &len) < 0
-		|| asn1_implicit_octet_string_to_der(2, shared_info2, shared_info2_len, NULL, &len) < 0
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
-		|| cms_content_type_to_der(content_type, out, outlen) != 1
-		|| x509_encryption_algor_to_der(enc_algor, enc_iv, enc_iv_len, out, outlen) != 1
-		|| asn1_implicit_octet_string_to_der(0, enced_content, enced_content_len, out, outlen) < 0
-		|| asn1_implicit_octet_string_to_der(1, shared_info1, shared_info1_len, out, outlen) < 0
-		|| asn1_implicit_octet_string_to_der(2, shared_info2, shared_info2_len, out, outlen) < 0) {
+		|| x509_encryption_algor_to_der(enc_algor, enc_iv, enc_iv_len, NULL, &len) != 1					// 对 contentEncryptionAlgorithm进行编码，之所以填NULL，仅获取编码后的长度
+		|| asn1_implicit_octet_string_to_der(0, enced_content, enced_content_len, NULL, &len) < 0		// 获取enced_content [0] IMPLICIT隐式编码后的长度。enced_content即为密文，enced_content_len即为密文的长度
+		|| asn1_implicit_octet_string_to_der(1, shared_info1, shared_info1_len, NULL, &len) < 0			// 获取shared_info1 [1] IMPLICIT 隐式编码后的长度。 此字段在SM4-GCM实际实现的时候不需要
+		|| asn1_implicit_octet_string_to_der(2, shared_info2, shared_info2_len, NULL, &len) < 0			// 获取shared_info2 [2] IMPLICIT 隐式编码后的长度。 此字段在SM4-GCM实际实现的时候不需要
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1											// 对EncryptedContentInfo的SEQUENCE进行T和L的编码，此处的len是SEQUENCE中所有元素编码后的长度
+		|| cms_content_type_to_der(content_type, out, outlen) != 1										// 对content_type进行编码
+		|| x509_encryption_algor_to_der(enc_algor, enc_iv, enc_iv_len, out, outlen) != 1				// 对 contentEncryptionAlgorithm进行编码
+		|| asn1_implicit_octet_string_to_der(0, enced_content, enced_content_len, out, outlen) < 0		// 对encryptedContent进行隐式编码。
+																										// 隐式编码（IMPLICIT）与显式编码(EXPLICIT)的不同之处在于：
+																										//  1. 隐式编码只编码一次，Tag直接使用IMPLICIT之前的tag; 
+																										//  2. 显式编码需要编码两次：第一次使用要编码类型自身的tag; 第二次编码使用EXPLICIT之前的tag
+
+		|| asn1_implicit_octet_string_to_der(1, shared_info1, shared_info1_len, out, outlen) < 0		// 对shared_info1进行隐式编码
+		|| asn1_implicit_octet_string_to_der(2, shared_info2, shared_info2_len, out, outlen) < 0) {		// 对shared_info2进行隐式编码
 		error_print();
 		return -1;
-	}
+	}																									// 至此， 对EncryptedContentInfo类型数据的编码全部完成。
 	return 1;
 }
 
+// EncryptedContentInfo的解码，为编码的逆过程，这里不再赘述
 int cms_enced_content_info_from_der(
 	int *content_type,
 	int *enc_algor, const uint8_t **enc_iv, size_t *enc_iv_len,

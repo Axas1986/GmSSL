@@ -238,17 +238,17 @@ int x509_encryption_algor_from_der(int *oid, const uint8_t **iv, size_t *ivlen,
 		if (ret < 0) error_print();
 		return ret;
 	}
-	if (asn1_oid_info_from_der(&info, x509_enc_algors, x509_enc_algors_count, &p, &len) != 1
-		|| asn1_octet_string_from_der(iv, ivlen, &p, &len) != 1
-		|| asn1_length_is_zero(len) != 1) {
+	if (asn1_oid_info_from_der(&info, x509_enc_algors, x509_enc_algors_count, &p, &len) != 1        // 解码AlgorithmIdentifier 外层sequence结构
+		|| asn1_octet_string_from_der(iv, ivlen, &p, &len) != 1     								// 解码IV向量
+		|| asn1_length_is_zero(len) != 1) {															// 解码完成后，len减少到0。如果不是，则说明解码异常
 		error_print();
 		return -1;
 	}
-	if (!(*iv) || *ivlen != 16) {
+	if (!(*iv) || *ivlen != 16) {																	// 这里看到iv向量长度为16，CBC模式下长度才为16
 		error_print();
 		return -1;
 	}
-	*oid = info->oid;
+	*oid = info->oid;																				// 返回oid的标识。至此，完成了对iv的解码
 	return 1;
 }
 
