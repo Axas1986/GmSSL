@@ -152,6 +152,7 @@ int cms_content_info_header_to_der(int content_type, size_t content_len, uint8_t
 }
 
 /*
+该函数对content为 Data ：：= OCTET STRING类型的ContentInfo进行编码
 ContentInfo ::= SEQUENCE {
 	contentType	OBJECT IDENTIFIER,
 	content		[0] EXPLICIT ANY OPTIONAL }
@@ -164,7 +165,7 @@ static int cms_content_info_data_to_der(const uint8_t *d, size_t dlen, uint8_t *
 	if (asn1_octet_string_to_der(d, dlen, NULL, &content_len) != 1			// 获取编码后Data的长度，存放在content_len里
 		|| cms_content_type_to_der(OID_cms_data, NULL, &len) != 1			// 获取编码后content_type的长度，之所以填NULL，是因为这里仅用作获取编码后的长度
 
-		|| asn1_explicit_to_der(0, d, content_len, NULL, &len) != 1			// 获取编码后content的 [0] EXPLICIT编码后的长度。
+		|| asn1_explicit_to_der(0, d, content_len, NULL, &len) != 1			// 获取编码后content的 [0] EXPLICIT编码后的长度（[0] EXPLICIT编码后TLV的总长度）。
 																			// content 有[0] EXPLICIT 标记，需要两次编码
 
 		|| asn1_sequence_header_to_der(len, out, outlen) != 1				// ContentInfo为SEQUENCE类型，此函数是将ContentInfo的TAG和Length进行编码，直接输出到out
@@ -180,22 +181,25 @@ static int cms_content_info_data_to_der(const uint8_t *d, size_t dlen, uint8_t *
 	return 1;
 }
 
+//注意：对于该函数的输入，content是自身已经编码好后的TLV结构，content_len为TLV的总长度
 int cms_content_info_to_der(
 	int content_type, const uint8_t *content, size_t content_len,
 	uint8_t **out, size_t *outlen)
 {
 	size_t len = 0;
 	if (content_type == OID_cms_data) {
-		return cms_content_info_data_to_der(content, content_len, out, outlen);
+		return cms_content_info_data_to_der(content, content_len, out, outlen);		// 如果content_type是data类型，则直接调用cms_content_info_data_to_der进行编码
 	}
-	if (cms_content_type_to_der(content_type, NULL, &len) != 1
-		|| asn1_explicit_to_der(0, content, content_len, NULL, &len) < 0
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
-		|| cms_content_type_to_der(content_type, out, outlen) != 1
-		|| asn1_explicit_to_der(0, content, content_len, out, outlen) < 0) {
+	if (cms_content_type_to_der(content_type, NULL, &len) != 1						// 获取编码后content_type的长度，之所以填NULL，是因为这里仅用作获取编码后的长度
+		|| asn1_explicit_to_der(0, content, content_len, NULL, &len) < 0			// 获取编码后content的 [0] EXPLICIT编码后的长度（[0] EXPLICIT编码后TLV的总长度）
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1						// ContentInfo为SEQUENCE类型，此函数是将ContentInfo的TAG和Length进行编码，直接输出到out
+																					// 此处的len为der(content_type) + der(content)的总长度,也就是SEQUENCE中所有元素编码后的长度
+
+		|| cms_content_type_to_der(content_type, out, outlen) != 1					// 此处对content_type进行编码，编码后，outlen的长度增加TLV(content_type)的长度
+		|| asn1_explicit_to_der(0, content, content_len, out, outlen) < 0) {		// 此处对编码后的content进行[0] EXPLICIT二次编码
 		error_print();
 		return -1;
-	}
+	}																				// 至此，完成了对conten_info的编码，注意输入的content和content_len均是content编码后的结果
 	return 1;
 }
 
@@ -208,13 +212,15 @@ int cms_content_info_from_der(
 	const uint8_t *d;
 	size_t dlen;
 
-	if ((ret = asn1_sequence_from_der(&d, &dlen, in, inlen)) != 1) {
+	if ((ret = asn1_sequence_from_der(&d, &dlen, in, inlen)) != 1) {			// 解码sequence结构，注意d和dlen随着解码不断变化
 		if (ret < 0) error_print();
 		return ret;
 	}
-	if (cms_content_type_from_der(content_type, &d, &dlen) != 1
-		|| asn1_explicit_from_der(0, content, content_len, &d, &dlen) < 0
-		|| asn1_length_is_zero(dlen) != 1) {
+	if (cms_content_type_from_der(content_type, &d, &dlen) != 1					// 解码获取oid对应的oid标识
+		|| asn1_explicit_from_der(0, content, content_len, &d, &dlen) < 0		// 解码获取content和content_len
+																				// 注意content是自身编码的TLV结构，content_len为TLV结构的长度
+																				// content本身的解码需要用户调用相关的解码函数继续完成
+		|| asn1_length_is_zero(dlen) != 1) {									// 解码完成的时候dlen的长度变为0，如果不是0,说明解码错误
 		error_print();
 		return -1;
 	}
@@ -289,8 +295,8 @@ int cms_enced_content_info_to_der(
 	uint8_t **out, size_t *outlen)
 {
 	size_t len = 0;
-	if (cms_content_type_to_der(content_type, NULL, &len) != 1
-		|| x509_encryption_algor_to_der(enc_algor, enc_iv, enc_iv_len, NULL, &len) != 1
+	if (cms_content_type_to_der(content_type, NULL, &len) != 1											// 获取编码后content_type的长度，之所以填NULL，是因为这里仅用作获取编码后的长度
+		|| x509_encryption_algor_to_der(enc_algor, enc_iv, enc_iv_len, NULL, &len) != 1					// 对 contentEncryptionAlgorithm进行编码，
 		|| asn1_implicit_octet_string_to_der(0, enced_content, enced_content_len, NULL, &len) < 0
 		|| asn1_implicit_octet_string_to_der(1, shared_info1, shared_info1_len, NULL, &len) < 0
 		|| asn1_implicit_octet_string_to_der(2, shared_info2, shared_info2_len, NULL, &len) < 0

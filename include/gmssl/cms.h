@@ -60,14 +60,20 @@ ContentInfo ::= SEQUENCE {
 int cms_content_info_header_to_der(
 	int content_type, size_t content_len,
 	uint8_t **out, size_t *outlen);
+
+// 对content_info类型进行完整的编码
 int cms_content_info_to_der(
 	int content_type,
 	const uint8_t *content, size_t content_len,
 	uint8_t **out, size_t *outlen);
+
+// 对content_info类型进行完整的解码
 int cms_content_info_from_der(
 	int *content_type,
 	const uint8_t **content, size_t *content_len, // content is the full TLV
 	const uint8_t **in, size_t *inlen);
+
+// 打印content_info各个字段的信息
 int cms_content_info_print(FILE *fp, int fmt, int ind, const char *label, const uint8_t *d, size_t dlen);
 
 /*

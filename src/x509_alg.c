@@ -174,6 +174,28 @@ int x509_encryption_algor_from_name(const char *name)
 	return info->oid;
 }
 
+
+/* 本函数对AlgorithmIdentifier进行编码，本函数的结构为SM4-CBC模式下的结构。GCM模式使用的时候需要改造
+   AlgorithmIdentifier  ::=  SEQUENCE  {
+        algorithm               OBJECT IDENTIFIER,
+        parameters              ANY DEFINED BY algorithm OPTIONAL  }
+
+// SM4-CBC模式下：
+AlgorithmIdentifier ::= SEQUENCE {
+  algorithm        OBJECT IDENTIFIER { 1.2.156.10197.1.301 },  -- SM4-CBC OID
+  parameters       OCTET STRING {IV (16 bytes)} OPTIONAL
+}
+
+
+// SM4-GCM模式下：
+
+      GCMParameters ::= SEQUENCE {
+        aes-nonce        OCTET STRING, -- recommended size is 12 octets --(IV向量值)
+        aes-ICVlen       AES-GCM-ICVlen DEFAULT 12 }   --（生成的TAG的长度，下面的编解码缺少这些信息)
+
+      AES-GCM-ICVlen ::= INTEGER (12 | 13 | 14 | 15 | 16)
+*/
+
 int x509_encryption_algor_to_der(int oid, const uint8_t *iv, size_t ivlen,
 	uint8_t **out, size_t *outlen)
 {
@@ -184,14 +206,19 @@ int x509_encryption_algor_to_der(int oid, const uint8_t *iv, size_t ivlen,
 		error_print();
 		return -1;
 	}
-	if (asn1_object_identifier_to_der(info->nodes, info->nodes_cnt, NULL, &len) != 1
-		|| asn1_octet_string_to_der(iv, ivlen, NULL, &len) != 1
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
-		|| asn1_object_identifier_to_der(info->nodes, info->nodes_cnt, out, outlen) != 1
-		|| asn1_octet_string_to_der(iv, ivlen, out, outlen) != 1) {
+	if (asn1_object_identifier_to_der(info->nodes, info->nodes_cnt, NULL, &len) != 1		// 对algorithm的oid进行编码，只获取编码后长度
+																							// 注意对于GCM模式，不支持，需要后续修改
+
+		|| asn1_octet_string_to_der(iv, ivlen, NULL, &len) != 1								// 获取iv编码后的长度。注意SM4-GCM模式下，
+																							// 还需要编码TAG的长度信息，这里只有IV的信息，
+																							// 没有TAG的长度信息,后续实现的时候需要加上TAG长度的编码
+
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1								// 对SEQUENCE类型的T和L进行编码(这个函数只有最外层的Sequence，没有Parameters层的sequence)
+		|| asn1_object_identifier_to_der(info->nodes, info->nodes_cnt, out, outlen) != 1	// 对algorithm的oid进行编码
+		|| asn1_octet_string_to_der(iv, ivlen, out, outlen) != 1) {							// 对iv向量进行编码，注意该函数中iv向量与oid同级。
 		error_print();
 		return -1;
-	}
+	}										// 至此，完成对AlgorithmIdentifier的编码
 	return 1;
 }
 
