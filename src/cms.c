@@ -620,23 +620,37 @@ int cms_encrypted_data_decrypt_from_der(
 	return 1;
 }
 
+/*
+	IssuerAndSerialNumber ::= SEQUENCE {
+        issuer Name,
+        serialNumber CertificateSerialNumber }
+
+		Name ::= CHOICE { -- only one possibility for now --
+		rdnSequence  RDNSequence }
+
+		RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
+
+		CertificateSerialNumber ::= INTEGER
+*/
 int cms_issuer_and_serial_number_to_der(
 	const uint8_t *issuer, size_t issuer_len,
 	const uint8_t *serial_number, size_t serial_number_len,
 	uint8_t **out, size_t *outlen)
 {
 	size_t len = 0;
-	if (asn1_sequence_to_der(issuer, issuer_len, NULL, &len) != 1
-		|| asn1_integer_to_der(serial_number, serial_number_len, NULL, &len) != 1
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
-		|| asn1_sequence_to_der(issuer, issuer_len, out, outlen) != 1
-		|| asn1_integer_to_der(serial_number, serial_number_len, out, outlen) != 1) {
+	if (asn1_sequence_to_der(issuer, issuer_len, NULL, &len) != 1						// 先对issuer进行sequence编码，仅获取长度，详见src/x509_cer.c::x509_name_set函数注释
+		|| asn1_integer_to_der(serial_number, serial_number_len, NULL, &len) != 1		// 对证书序列号serial_number进行编码，仅获取长度
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1							// 对IssuerAndSerialNumber外层的SEQUENCE编码，这一步只编码T和L
+																						// (带有header的函数通常是指编码Tag和Length(TLV中的T和L))
+		|| asn1_sequence_to_der(issuer, issuer_len, out, outlen) != 1					// 对issuer进行sequence编码
+		|| asn1_integer_to_der(serial_number, serial_number_len, out, outlen) != 1) {	// 对证书序列号进行编码
 		error_print();
 		return -1;
-	}
+	}														// 至此，完成IssuerAndSerialNumber的完整编码
 	return 1;
 }
 
+// IssuerAndSerialNumber解码，不再赘述
 int cms_issuer_and_serial_number_from_der(
 	const uint8_t **issuer, size_t *issuer_len,
 	const uint8_t **serial_number, size_t *serial_number_len,

@@ -116,6 +116,7 @@ int x509_name_type_to_der(int oid, uint8_t **out, size_t *outlen);
 #define X509_ub_serial_number 64
 #define X509_ub_pseudonym 128
 
+// AttributeTypeAndValue的编码和解码
 int x509_attr_type_and_value_check(int oid, int tag, const uint8_t *val, size_t vlen);
 int x509_attr_type_and_value_to_der(int oid, int tag, const uint8_t *val, size_t vlen, uint8_t **out, size_t *outlen);
 int x509_attr_type_and_value_from_der(int *oid, int *tag, const uint8_t **val, size_t *vlen, const uint8_t **in, size_t *inlen);
@@ -124,6 +125,8 @@ int x509_attr_type_and_value_print(FILE *fp, int fmt, int ind, const char *label
 /*
 RelativeDistinguishedName ::= SET SIZE (1..MAX) OF AttributeTypeAndValue
 */
+// 注意，这里是将一个RelativeDistinguishedName编码。一个RelativeDistinguishedName可能包含多个AttributeTypeAndValue
+// val是direct_name，未编码的值
 int x509_rdn_to_der(int oid, int tag, const uint8_t *val, size_t vlen, const uint8_t *more, size_t mlen, uint8_t **out, size_t *outlen);
 int x509_rdn_from_der(int *oid, int *tag, const uint8_t **val, size_t *vlen, const uint8_t **more, size_t *mlen, const uint8_t **in, size_t *inlen);
 int x509_rdn_check(const uint8_t *d, size_t dlen);

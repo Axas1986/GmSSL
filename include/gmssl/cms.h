@@ -83,6 +83,7 @@ Data ::= OCTET STRING
 #define cms_data_from_der(d,dlen,in,inlen) asn1_octet_string_from_der(d,dlen,in,inlen)
 #define cms_data_print(fp,fmt,ind,label,d,dlen) format_bytes(fp,fmt,ind,label,d,dlen)
 
+// 对EncryptedContentInfo类型的数据进行编码，详细注释见函数实现
 /*
 EncryptedContentInfo ::= SEQUENCE {
 	contentType			OBJECT IDENTIFIER,
@@ -98,6 +99,8 @@ int cms_enced_content_info_to_der(
 	const uint8_t *shared_info1, size_t shared_info1_len,
 	const uint8_t *shared_info2, size_t shared_info2_len,
 	uint8_t **out, size_t *outlen);
+
+// 对EncryptedContentInfo类型的数据进行解码
 int cms_enced_content_info_from_der(
 	int *content_type,
 	int *enc_algor, const uint8_t **enc_iv, size_t *enc_iv_len,
@@ -105,8 +108,11 @@ int cms_enced_content_info_from_der(
 	const uint8_t **shared_info1, size_t *shared_info1_len,
 	const uint8_t **shared_info2, size_t *shared_info2_len,
 	const uint8_t **in, size_t *inlen);
+	
+// 对EncryptedContentInfo类型的数据进行打印
 int cms_enced_content_info_print(FILE *fp, int fmt, int ind, const char *label, const uint8_t *d, size_t dlen);
 
+// 对数据进行加密之后，封装成EncryptedContentInfo类型，并进行编码（实现的时候不用该接口）
 int cms_enced_content_info_encrypt_to_der(
 	int enc_algor,
 	const uint8_t *key, size_t keylen,
@@ -115,6 +121,8 @@ int cms_enced_content_info_encrypt_to_der(
 	const uint8_t *shared_info1, size_t shared_info1_len,
 	const uint8_t *shared_info2, size_t shared_info2_len,
 	uint8_t **out, size_t *outlen);
+
+// 对EncryptedContentInfo类型进行解码，解码之后对密文进行解密（实现的时候不用该接口）
 int cms_enced_content_info_decrypt_from_der(
 	int *enc_algor,
 	const uint8_t *key, size_t keylen,
@@ -162,10 +170,18 @@ int cms_encrypted_data_decrypt_from_der(
 	const uint8_t **shared_info2, size_t *shared_info2_len,
 	const uint8_t **in, size_t *inlen);
 
+
+// 证书颁发者issuer 的编码见 src/x509_cer.c::x509_name_set函数
+// 该函数中的issuer参数是x509_name_set函数调用输出的结果，issuer_len是编码后的issue的长度。但是issuer没有SEQUENCE的编码
 /*
 IssuerAndSerialNumber ::= SEQUENCE {
-	isser		Name,
+	issuer		Name,
 	serialNumber	INTEGER }
+
+   Name ::= CHOICE { -- only one possibility for now --
+     rdnSequence  RDNSequence }
+
+   RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
 */
 int cms_issuer_and_serial_number_to_der(
 	const uint8_t *issuer, size_t issuer_len,

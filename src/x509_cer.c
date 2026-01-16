@@ -356,6 +356,7 @@ int x509_directory_name_check_ex(int tag, const uint8_t *d, size_t dlen, size_t 
 	return 1;
 }
 
+// 输入参数d为directory_string类型，未编码的字符串值，dlen为directory_string的长度
 int x509_directory_name_to_der(int tag, const uint8_t *d, size_t dlen, uint8_t **out, size_t *outlen)
 {
 	if (dlen == 0) {
@@ -488,6 +489,24 @@ int x509_attr_type_and_value_check(int oid, int tag, const uint8_t *val, size_t 
 	return -1;
 }
 
+// AttributeTypeAndValue 类型编码，此处的value是编码后的DirectoryString(函数中叫directory_name)
+/*
+   AttributeTypeAndValue ::= SEQUENCE {
+     type     AttributeType,
+     value    AttributeValue }
+
+   AttributeType ::= OBJECT IDENTIFIER
+
+   AttributeValue ::= ANY -- DEFINED BY AttributeType
+
+   AttributeValue 通常取值从以下类型中选择
+   DirectoryString ::= CHOICE {
+         teletexString           TeletexString (SIZE (1..MAX)),
+         printableString         PrintableString (SIZE (1..MAX)),
+         universalString         UniversalString (SIZE (1..MAX)),
+         utf8String              UTF8String (SIZE (1..MAX)),
+         bmpString               BMPString (SIZE (1..MAX)) }
+*/
 int x509_attr_type_and_value_to_der(int oid, int tag, const uint8_t *val, size_t vlen,
 	uint8_t **out, size_t *outlen)
 {
@@ -497,17 +516,18 @@ int x509_attr_type_and_value_to_der(int oid, int tag, const uint8_t *val, size_t
 		return 0;
 	}
 	if (x509_attr_type_and_value_check(oid, tag, val, vlen) != 1
-		|| x509_name_type_to_der(oid, NULL, &len) != 1
-		|| x509_directory_name_to_der(tag, val, vlen, NULL, &len) != 1
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
-		|| x509_name_type_to_der(oid, out, outlen) != 1
-		|| x509_directory_name_to_der(tag, val, vlen, out, outlen) != 1) {
+		|| x509_name_type_to_der(oid, NULL, &len) != 1						// AttributeType编码，仅返回编码后的长度
+		|| x509_directory_name_to_der(tag, val, vlen, NULL, &len) != 1		// AttributeValue编码，仅返回编码后的长度
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1				// 外层SEQUENCE编码
+		|| x509_name_type_to_der(oid, out, outlen) != 1						// AttributeType编码
+		|| x509_directory_name_to_der(tag, val, vlen, out, outlen) != 1) {  // AttributeValue编码
 		error_print();
 		return -1;
 	}
 	return 1;
 }
 
+// AttributeTypeAndValue 类型解码
 int x509_attr_type_and_value_from_der(int *oid, int *tag, const uint8_t **val, size_t *vlen,
 	const uint8_t **in, size_t *inlen)
 {
@@ -593,6 +613,13 @@ int x509_rdn_check(const uint8_t *d, size_t dlen)
 	return 1;
 }
 
+/*
+RelativeDistinguishedName ::=
+     SET SIZE (1..MAX) OF AttributeTypeAndValue
+*/
+// 将一个RelativeDistinguishedName编码。一个RelativeDistinguishedName包含一个AttributeTypeAndValue
+// NOTE: val是direct_name，未编码的值，应该是DirectoryString类型
+// more和morelen是扩展参数，我们的场景使用不到
 int x509_rdn_to_der(int oid, int tag, const uint8_t *val, size_t vlen,
 	const uint8_t *more, size_t morelen,
 	uint8_t **out, size_t *outlen)
@@ -606,17 +633,18 @@ int x509_rdn_to_der(int oid, int tag, const uint8_t *val, size_t vlen,
 		error_print();
 		return -1;
 	}
-	if (x509_attr_type_and_value_to_der(oid, tag, val, vlen, NULL, &len) < 0
-		|| asn1_data_to_der(more, morelen, NULL, &len) < 0
-		|| asn1_set_header_to_der(len, out, outlen) != 1
-		|| x509_attr_type_and_value_to_der(oid, tag, val, vlen, out, outlen) < 0
-		|| asn1_data_to_der(more, morelen, out, outlen) < 0) {
+	if (x509_attr_type_and_value_to_der(oid, tag, val, vlen, NULL, &len) < 0		// 编码AttributeTypeAndValue，只获取编码后的长度
+		|| asn1_data_to_der(more, morelen, NULL, &len) < 0							// 编码扩展数据，只获取编码后的长度
+		|| asn1_set_header_to_der(len, out, outlen) != 1							// 编码RelativeDistinguishedName外层的SET
+		|| x509_attr_type_and_value_to_der(oid, tag, val, vlen, out, outlen) < 0	// 编码AttributeTypeAndValue
+		|| asn1_data_to_der(more, morelen, out, outlen) < 0) {						// 编码额外的数据
 		error_print();
 		return -1;
 	}
 	return 1;
 }
 
+// RelativeDistinguishedName解码
 int x509_rdn_from_der(int *oid, int *tag, const uint8_t **val, size_t *vlen,
 	const uint8_t **more, size_t *morelen,
 	const uint8_t **in, size_t *inlen)
@@ -625,7 +653,7 @@ int x509_rdn_from_der(int *oid, int *tag, const uint8_t **val, size_t *vlen,
 	const uint8_t *d;
 	size_t dlen;
 
-	if ((ret = asn1_set_from_der(&d, &dlen, in, inlen)) != 1) {
+	if ((ret = asn1_set_from_der(&d, &dlen, in, inlen)) != 1) {					// 外层SET解码		
 		if (ret < 0) error_print();
 		else {
 			*oid = *tag = -1;
@@ -634,7 +662,7 @@ int x509_rdn_from_der(int *oid, int *tag, const uint8_t **val, size_t *vlen,
 		}
 		return ret;
 	}
-	if (x509_attr_type_and_value_from_der(oid, tag, val, vlen, &d, &dlen) != 1) {
+	if (x509_attr_type_and_value_from_der(oid, tag, val, vlen, &d, &dlen) != 1) {	
 		error_print();
 		return -1;
 	}
@@ -712,6 +740,9 @@ int x509_name_check(const uint8_t *d, size_t dlen)
 	return 1;
 }
 
+// 编码并添加一个RelativeDistinguishedName类型的数据（多次调用该接口相当于添加多个rdn，最后组成一个rdn的内存序列）
+// 此处的val是未编码的directory_name，是一个未编码字符串
+// more和morelen是扩展数据
 int x509_name_add_rdn(uint8_t *d, size_t *dlen, size_t maxlen,
 	int oid, int tag, const uint8_t *val, size_t vlen,
 	const uint8_t *more, size_t morelen)
@@ -725,24 +756,34 @@ int x509_name_add_rdn(uint8_t *d, size_t *dlen, size_t maxlen,
 		return -1;
 	}
 	p = d + (*dlen);
-	if (x509_rdn_to_der(oid, tag, val, vlen, more, morelen, NULL, dlen) < 0
-		|| asn1_length_le(*dlen, maxlen) != 1
-		|| (ret = x509_rdn_to_der(oid, tag, val, vlen, more, morelen, &p, &len)) < 0) {
+	if (x509_rdn_to_der(oid, tag, val, vlen, more, morelen, NULL, dlen) < 0					// 获取RelativeDistinguishedName编码后的长度
+		|| asn1_length_le(*dlen, maxlen) != 1												// 判断编码后的长度是否大于缓存区的最大长度maxlen
+		|| (ret = x509_rdn_to_der(oid, tag, val, vlen, more, morelen, &p, &len)) < 0) {		// 编码RelativeDistinguishedName
 		error_print();
 		return -1;
 	}
 	return ret;
 }
 
+
+/*
+Name ::= CHOICE { -- only one possibility for now --
+     rdnSequence  RDNSequence }
+
+RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
+*/
+
+// 向Name中添加country_name，添加的结果是country_name被编码并添加到Name序列中，成为Name序列中的元素
 int x509_name_add_country_name(uint8_t *d, size_t *dlen, size_t maxlen, const char val[2])
 {
 	int ret;
 	ret = x509_name_add_rdn(d, dlen, maxlen,
-		OID_at_country_name, ASN1_TAG_PrintableString, (uint8_t *)val, val ? 2 : 0, NULL, 0);
+		OID_at_country_name, ASN1_TAG_PrintableString, (uint8_t *)val, val ? 2 : 0, NULL, 0);				// 添加country_name
 	if (ret < 0) error_print();
 	return ret;
 }
 
+// 向Name中添加province_name，添加的结果是province_name被编码并添加到Name序列中，成为Name序列中的元素
 int x509_name_add_state_or_province_name(uint8_t *d, size_t *dlen, size_t maxlen,
 	int tag, const uint8_t *val, size_t vlen)
 {
@@ -752,6 +793,7 @@ int x509_name_add_state_or_province_name(uint8_t *d, size_t *dlen, size_t maxlen
 	return ret;
 }
 
+// 向Name中添加locality_name，添加的结果是locality_name被编码并添加到Name序列中，成为Name序列中的元素
 int x509_name_add_locality_name(uint8_t *d, size_t *dlen, size_t maxlen,
 	int tag, const uint8_t *val, size_t vlen)
 {
@@ -761,6 +803,7 @@ int x509_name_add_locality_name(uint8_t *d, size_t *dlen, size_t maxlen,
 	return ret;
 }
 
+// 向Name中添加organization_name，添加的结果是organization_name被编码并添加到Name序列中，成为Name序列中的元素
 int x509_name_add_organization_name(uint8_t *d, size_t *dlen, size_t maxlen,
 	int tag, const uint8_t *val, size_t vlen)
 {
@@ -770,6 +813,7 @@ int x509_name_add_organization_name(uint8_t *d, size_t *dlen, size_t maxlen,
 	return ret;
 }
 
+// 向Name中添加organizational_unit_name信息
 int x509_name_add_organizational_unit_name(uint8_t *d, size_t *dlen, size_t maxlen,
 	int tag, const uint8_t *val, size_t vlen)
 {
@@ -779,6 +823,7 @@ int x509_name_add_organizational_unit_name(uint8_t *d, size_t *dlen, size_t maxl
 	return ret;
 }
 
+// 向Name中添加common_name信息
 int x509_name_add_common_name(uint8_t *d, size_t *dlen, size_t maxlen,
 	int tag, const uint8_t *val, size_t vlen)
 {
@@ -788,6 +833,7 @@ int x509_name_add_common_name(uint8_t *d, size_t *dlen, size_t maxlen,
 	return ret;
 }
 
+// 向Name中添加domain_component信息
 int x509_name_add_domain_component(uint8_t *d, size_t *dlen, size_t maxlen,
 	const char *val, size_t vlen)
 {
@@ -799,6 +845,7 @@ int x509_name_add_domain_component(uint8_t *d, size_t *dlen, size_t maxlen,
 
 static size_t optstrlen(const char *s) { return s ? strlen(s) : 0; }
 
+// 判断某个direct_name使用什么Tag(ASN1_TAG_PrintableString和 ASN1_TAG_UTF8String 二选一)
 static int x509_name_tag(const char *str)
 {
 	if (str) {
@@ -809,6 +856,9 @@ static int x509_name_tag(const char *str)
 	return 0;
 }
 
+// 设置证书的name信息，调用该函数完成后，得到的是一个SEQUENCE序列（NAME的定义)，SEQUENCE中的元素已经编码，但外层的SEQUENCE没有编码
+// d表示用于存放issuer的缓冲区首地址。在函数调用过程中d指向的地址不变，始终指向缓存首地址
+// dlen是出参，每次编码后，dlen就会变长
 int x509_name_set(uint8_t *d, size_t *dlen, size_t maxlen,
 	const char country[2], const char *state, const char *locality,
 	const char *org, const char *org_unit, const char *common_name)
@@ -818,7 +868,7 @@ int x509_name_set(uint8_t *d, size_t *dlen, size_t maxlen,
 		return -1;
 	}
 	*dlen = 0;
-	if (x509_name_add_country_name(d, dlen, maxlen, country) < 0
+	if (x509_name_add_country_name(d, dlen, maxlen, country) < 0																		
 		|| x509_name_add_state_or_province_name(d, dlen, maxlen, x509_name_tag(state), (uint8_t *)state, optstrlen(state)) < 0
 		|| x509_name_add_locality_name(d, dlen, maxlen, x509_name_tag(locality), (uint8_t *)locality, optstrlen(locality)) < 0
 		|| x509_name_add_organization_name(d, dlen, maxlen, x509_name_tag(org), (uint8_t *)org, optstrlen(org)) < 0
