@@ -1509,14 +1509,24 @@ int cms_recipient_infos_print(FILE *fp, int fmt, int ind, const char *label, con
 /*
 EnvelopedData ::= SEQUENCE {
 	version CMSVersion,
-	originatorInfo [0] IMPLICIT OriginatorInfo OPTIONAL,
+	originatorInfo [0] IMPLICIT OriginatorInfo OPTIONAL,(缺省，不用)
 	recipientInfos RecipientInfos,
 	encryptedContentInfo EncryptedContentInfo,
-	unprotectedAttrs [1] IMPLICIT UnprotectedAttributes OPTIONAL }
-*/
-// 对EnvelopedData类型进行编码
-// NOTE:这里不包含对unprotectedAttrs的编码，这部分在实际使用的要自己实现，并加在EnvelopedData的编码里
+	unprotectedAttrs [1] IMPLICIT UnprotectedAttributes OPTIONAL（GMSSL实现里没有，需要自己实现） }
 
+RecipientInfos ::= SET SIZE (1..MAX) OF RecipientInfo
+*/
+
+// 对EnvelopedData类型进行编码
+// NOTE：ASN.1定义的数据类型是嵌套结构，某一层级的结构只负责本层级的编码，GMSSL也是按照这一原则来实现函数功能的。
+//比如，cms_enveloped_data_to_der只负责EnvelopedData所包含元素的编码，但包含的元素本身的编码由自身的编码函数完成，
+// 比如，recipientInfos的编码由相关编码函数完成，这里的输入参数rcpt_infos是该项编码后的结果，rcpt_infos_len是编码后的TLV的长度
+
+
+// NOTE:这里不包含对unprotectedAttrs的编码，这部分在实际使用的要自己实现，并加在EnvelopedData的编码里
+// NOTE: rcpt_infos其实是调用cms_recipient_infos_add_recipient_info返回的多个recipient_info编码后拼接的set，
+// 但在我们的使用场景下，由于只有一个recipient_info，因此我们只需要填写recipient_info编码后的首地址即可，rcpt_infos_len填写单个recipient_info的长度即可（cms_recipient_info_encrypt_to_der调用返回的结果)
+// NOTE: shared_info1和shared_info2，在文件使用场景下用不到，使用的时候可以考虑省略。
 int cms_enveloped_data_to_der(
 	int version,
 	const uint8_t *rcpt_infos, size_t rcpt_infos_len,
@@ -1528,15 +1538,15 @@ int cms_enveloped_data_to_der(
 	uint8_t **out, size_t *outlen)
 {
 	size_t len = 0;
-	if (asn1_int_to_der(version, NULL, &len) != 1
-		|| asn1_set_to_der(rcpt_infos, rcpt_infos_len, NULL, &len) != 1
-		|| cms_enced_content_info_to_der(content_type,
+	if (asn1_int_to_der(version, NULL, &len) != 1								// 对version进行编码，仅获取编码后TLV的长度
+		|| asn1_set_to_der(rcpt_infos, rcpt_infos_len, NULL, &len) != 1			// 对RecipientInfos的外层SET OF进行编码，仅获取编码后TLV的长度
+		|| cms_enced_content_info_to_der(content_type,							// 对encryptedContentInfo进行编码，仅获取编码后的长度
 			enc_algor, iv, ivlen,
 			enced_content, enced_content_len,
 			shared_info1, shared_info1_len,
 			shared_info2, shared_info2_len,
 			NULL, &len) != 1
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1					// 对EnvelopedData最外层的SEQUENCE进行编码
 		|| asn1_int_to_der(version, out, outlen) != 1
 		|| asn1_set_to_der(rcpt_infos, rcpt_infos_len, out, outlen) != 1
 		|| cms_enced_content_info_to_der(content_type,
