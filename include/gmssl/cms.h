@@ -308,6 +308,7 @@ int cms_signed_data_verify_from_der(
 	const uint8_t **in, size_t *inlen);
 
 
+// 对单个RecipientInfo进行编码
 /*
 RecipientInfo ::= SEQUENCE {
 	version				INTEGER (1),

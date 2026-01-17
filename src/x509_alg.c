@@ -536,6 +536,14 @@ int x509_public_key_encryption_algor_from_name(const char *name)
 	return info->oid;
 }
 
+// 对keyEncryptionAlgorithm进行编码
+/*
+   AlgorithmIdentifier  ::=  SEQUENCE  {
+        algorithm               OBJECT IDENTIFIER,
+        parameters              ANY DEFINED BY algorithm OPTIONAL  }
+*/
+// 此处，实际使用时parameters缺省，此处的做法是直接没有parameters，也不是NULL(另一种做法可以填写为NULL)
+// 仅填写OID，而填写的oid必须是OID_sm2encrypt的oid，因为是SM2加密SM4密钥的场景
 int x509_public_key_encryption_algor_to_der(int oid, uint8_t **out, size_t *outlen)
 {
 	const ASN1_OID_INFO *info;
@@ -545,14 +553,14 @@ int x509_public_key_encryption_algor_to_der(int oid, uint8_t **out, size_t *outl
 		error_print();
 		return -1;
 	}
-	if (!(info = asn1_oid_info_from_oid(x509_pke_algors, x509_pke_algors_count, oid))) {
+	if (!(info = asn1_oid_info_from_oid(x509_pke_algors, x509_pke_algors_count, oid))) {		// 通过oid标识从维护的oid数组x509_pke_algors中获取oid信息（里面包含真正的oid)
 		error_print();
 		return -1;
 	}
-	if (asn1_object_identifier_to_der(info->nodes, info->nodes_cnt, NULL, &len) != 1
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
-		|| asn1_object_identifier_to_der(info->nodes, info->nodes_cnt, out, outlen) != 1) {
-		error_print();
+	if (asn1_object_identifier_to_der(info->nodes, info->nodes_cnt, NULL, &len) != 1			// 对oid进行编码，此处仅获取编码后的TLV的长度 
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1									// 对AlgorithmIdentifier外层SEQUENCE进行编码，仅编码T和L 					
+		|| asn1_object_identifier_to_der(info->nodes, info->nodes_cnt, out, outlen) != 1) {		// 对oid进行编码
+		error_print();																			// 至此，keyEncryptionAlgorithm编码完成
 		return -1;
 	}
 	return 1;

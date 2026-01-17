@@ -856,6 +856,11 @@ static int x509_name_tag(const char *str)
 	return 0;
 }
 
+
+/*
+Name ::= SEQUENCE OF RelativeDistinguishedName(这里的SEQUENCE没有编码)
+*/
+
 // 设置证书的name信息，调用该函数完成后，得到的是一个SEQUENCE序列（NAME的定义)，SEQUENCE中的元素已经编码，但外层的SEQUENCE没有编码
 // d表示用于存放issuer的缓冲区首地址。在函数调用过程中d指向的地址不变，始终指向缓存首地址
 // dlen是出参，每次编码后，dlen就会变长

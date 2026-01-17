@@ -1261,6 +1261,20 @@ int cms_signed_data_verify_from_der(
 	return 1;
 }
 
+// 对单个RecipientInfo进行编码
+// 证书颁发者issuer 的编码见 src/x509_cer.c::x509_name_set函数
+// 该函数中的issuer参数是x509_name_set函数调用输出的结果，issuer_len是编码后的issue的长度。但是issuer没有SEQUENCE的编码
+// serial_number为证书序列号
+// public_key_enc_algor为SM4密钥加密算法的索引，应该是维护一个map，通过索引获取真正的算法参数
+// enced_key为SM2加密SM4密钥后的密文字符串
+/*
+RecipientInfo ::= SEQUENCE {
+	version				INTEGER (1),
+	issuerAndSerialNumber		IssuerAndSerialNumber,
+	keyEncryptionAlgorithm		AlgorithmIdentifier,
+	encryptedKey			OCTET STRING -- DER-encoding of SM2Cipher
+}
+*/
 int cms_recipient_info_to_der(
 	int version,
 	const uint8_t *issuer, size_t issuer_len,
@@ -1274,10 +1288,10 @@ int cms_recipient_info_to_der(
 		error_print();
 		return -1;
 	}
-	if (asn1_int_to_der(version, NULL, &len) != 1
-		|| cms_issuer_and_serial_number_to_der(issuer, issuer_len,
-			serial_number, serial_number_len, NULL, &len) != 1
-		|| x509_public_key_encryption_algor_to_der(public_key_enc_algor, NULL, &len) != 1
+	if (asn1_int_to_der(version, NULL, &len) != 1											// 对version进行编码，仅获取编码后长度
+		|| cms_issuer_and_serial_number_to_der(issuer, issuer_len,							// 编码issuerAndSerialNumber，仅获取编码后长度
+			serial_number, serial_number_len, NULL, &len) != 1								// 传入的issuer为调用src/x509_cer.c::x509_name_set函数输出的结果
+		|| x509_public_key_encryption_algor_to_der(public_key_enc_algor, NULL, &len) != 1	// 
 		|| asn1_octet_string_to_der(enced_key, enced_key_len, NULL, &len) != 1
 		|| asn1_sequence_header_to_der(len, out, outlen) != 1
 		|| asn1_int_to_der(version, out, outlen) != 1
