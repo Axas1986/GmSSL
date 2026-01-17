@@ -1547,9 +1547,9 @@ int cms_enveloped_data_to_der(
 			shared_info2, shared_info2_len,
 			NULL, &len) != 1
 		|| asn1_sequence_header_to_der(len, out, outlen) != 1					// 对EnvelopedData最外层的SEQUENCE进行编码
-		|| asn1_int_to_der(version, out, outlen) != 1
-		|| asn1_set_to_der(rcpt_infos, rcpt_infos_len, out, outlen) != 1
-		|| cms_enced_content_info_to_der(content_type,
+		|| asn1_int_to_der(version, out, outlen) != 1							// 对version进行编码
+		|| asn1_set_to_der(rcpt_infos, rcpt_infos_len, out, outlen) != 1		// 对RecipientInfos的外层SET OF进行编码
+		|| cms_enced_content_info_to_der(content_type,							// 对encryptedContentInfo进行编码
 			enc_algor, iv, ivlen,
 			enced_content, enced_content_len,
 			shared_info1, shared_info1_len,
@@ -1557,7 +1557,7 @@ int cms_enveloped_data_to_der(
 			out, outlen) != 1) {
 		error_print();
 		return -1;
-	}
+	}													// 至此，对EnvelopedData的编码全部完成
 	return 1;
 }
 

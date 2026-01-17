@@ -174,8 +174,8 @@ int x509_encryption_algor_from_name(const char *name)
 	return info->oid;
 }
 
-
-/* 本函数对AlgorithmIdentifier进行编码，本函数的结构为SM4-CBC模式下的结构。GCM模式使用的时候需要改造
+// NOTE: GCM模式使用的时候需要改造
+/* 本函数对AlgorithmIdentifier进行编码，本函数的结构为SM4-CBC模式下的结构。
    AlgorithmIdentifier  ::=  SEQUENCE  {
         algorithm               OBJECT IDENTIFIER,
         parameters              ANY DEFINED BY algorithm OPTIONAL  }
