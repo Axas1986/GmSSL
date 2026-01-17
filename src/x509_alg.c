@@ -566,6 +566,7 @@ int x509_public_key_encryption_algor_to_der(int oid, uint8_t **out, size_t *outl
 	return 1;
 }
 
+// 对keyEncryptionAlgorithm进行解码，编码的逆过程，不再赘述
 int x509_public_key_encryption_algor_from_der(int *oid, const uint8_t **params, size_t *params_len,
 	const uint8_t **in, size_t *inlen)
 {

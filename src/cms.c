@@ -1265,7 +1265,7 @@ int cms_signed_data_verify_from_der(
 // 证书颁发者issuer 的编码见 src/x509_cer.c::x509_name_set函数
 // 该函数中的issuer参数是x509_name_set函数调用输出的结果，issuer_len是编码后的issue的长度。但是issuer没有SEQUENCE的编码
 // serial_number为证书序列号
-// public_key_enc_algor为SM4密钥加密算法的索引，应该是维护一个map，通过索引获取真正的算法参数
+// public_key_enc_algor为SM4密钥加密算法的索引，应该是维护一个数组，通过索引获取真正的算法参数
 // enced_key为SM2加密SM4密钥后的密文字符串
 /*
 RecipientInfo ::= SEQUENCE {
@@ -1290,21 +1290,22 @@ int cms_recipient_info_to_der(
 	}
 	if (asn1_int_to_der(version, NULL, &len) != 1											// 对version进行编码，仅获取编码后长度
 		|| cms_issuer_and_serial_number_to_der(issuer, issuer_len,							// 编码issuerAndSerialNumber，仅获取编码后长度
-			serial_number, serial_number_len, NULL, &len) != 1								// 传入的issuer为调用src/x509_cer.c::x509_name_set函数输出的结果
-		|| x509_public_key_encryption_algor_to_der(public_key_enc_algor, NULL, &len) != 1	// 
-		|| asn1_octet_string_to_der(enced_key, enced_key_len, NULL, &len) != 1
-		|| asn1_sequence_header_to_der(len, out, outlen) != 1
-		|| asn1_int_to_der(version, out, outlen) != 1
-		|| cms_issuer_and_serial_number_to_der(issuer, issuer_len,
-			serial_number, serial_number_len, out, outlen) != 1
-		|| x509_public_key_encryption_algor_to_der(public_key_enc_algor, out, outlen) != 1
-		|| asn1_octet_string_to_der(enced_key, enced_key_len, out, outlen) != 1) {
+			serial_number, serial_number_len, NULL, &len) != 1								// 传入的issuer为调用src/x509_cer.c::x509_name_set函数输出的结果，仅获取编码后的长度
+		|| x509_public_key_encryption_algor_to_der(public_key_enc_algor, NULL, &len) != 1	// 对keyEncryptionAlgorithm进行编码，keyEncryptionAlgorithm内只包含OID，仅获取编码后的长度
+		|| asn1_octet_string_to_der(enced_key, enced_key_len, NULL, &len) != 1				// 对SM2加密SM4密钥后的字节串进行编码，仅获取编码后的长度
+		|| asn1_sequence_header_to_der(len, out, outlen) != 1								// 编码RecipientInfo 外层SEQUENCE的T和L
+		|| asn1_int_to_der(version, out, outlen) != 1										// 编码version
+		|| cms_issuer_and_serial_number_to_der(issuer, issuer_len,						    // 编码issuerAndSerialNumber
+			serial_number, serial_number_len, out, outlen) != 1								
+		|| x509_public_key_encryption_algor_to_der(public_key_enc_algor, out, outlen) != 1		// 编码keyEncryptionAlgorithm
+		|| asn1_octet_string_to_der(enced_key, enced_key_len, out, outlen) != 1) {				// 编码SM2加密SM4密钥后的密文字节串
 		error_print();
-		return -1;
-	}
+		return -1;																			
+	}																							// 至此，对单个RecipientInfo的编码全部完成
 	return 1;
 }
 
+// 对单个RecipientInfo进行解码，编码的逆过程
 int cms_recipient_info_from_der(
 	int *version,
 	const uint8_t **issuer, size_t *issuer_len,
@@ -1370,6 +1371,7 @@ err:
 	return -1;
 }
 
+// SM2加密SM4密钥，并编码recipient_info
 int cms_recipient_info_encrypt_to_der(
 	const SM2_KEY *public_key,
 	const uint8_t *issuer, size_t issuer_len,
@@ -1452,6 +1454,10 @@ int cms_recipient_info_decrypt_from_der(
 	return 1;
 }
 
+// SM2加密SM4密钥，并编码recipient_info，可以连续添加多个recipient_info,但不包含外层SET的编码
+/*
+RecipientInfos ::= SET SIZE (1..MAX) OF RecipientInfo
+*/
 int cms_recipient_infos_add_recipient_info(
 	uint8_t *d, size_t *dlen, size_t maxlen,
 	const SM2_KEY *public_key,
@@ -1498,6 +1504,18 @@ int cms_recipient_infos_print(FILE *fp, int fmt, int ind, const char *label, con
 	}
 	return 1;
 }
+
+
+/*
+EnvelopedData ::= SEQUENCE {
+	version CMSVersion,
+	originatorInfo [0] IMPLICIT OriginatorInfo OPTIONAL,
+	recipientInfos RecipientInfos,
+	encryptedContentInfo EncryptedContentInfo,
+	unprotectedAttrs [1] IMPLICIT UnprotectedAttributes OPTIONAL }
+*/
+// 对EnvelopedData类型进行编码
+// NOTE:这里不包含对unprotectedAttrs的编码，这部分在实际使用的要自己实现，并加在EnvelopedData的编码里
 
 int cms_enveloped_data_to_der(
 	int version,
